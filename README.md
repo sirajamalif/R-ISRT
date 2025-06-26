@@ -1,1 +1,1 @@
-****This repository documents the complete walkthrough of my R learning journey with ISRT, capturing everything I’ve learned since day one.****
+****This repository offers a comprehensive walkthrough of my professional R training journey at ISRT, documenting everything I have learned since day one of the program.****

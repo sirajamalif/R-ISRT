@@ -1,0 +1,365 @@
+---
+title: "Session-5: Problem Solving (Session 1-4)"
+subtitle: "R for Applied Statistics and Data Science"
+author: "Institute of Statistical Research and Training (ISRT), University of Dhaka"
+institute: "https://isrt.ac.bd"
+format:
+  pdf: 
+    papersize: a4paper
+    geometry:
+      - top=0.8in
+      - bottom=0.8in
+      - left=0.8in
+      - right=0.8in
+  html: 
+    embed-resources: true
+execute: 
+  echo: true #
+  eval: true #
+  warning: false
+  message: false
+  fig-align: "center"
+  fig-width: 4.5
+  fig-height: 3.25
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(tidyverse)
+library(gapminder)
+library(palmerpenguins)
+library(gt)
+```
+
+
+## Task 1 (Data Manipulation)
+
+You'll be working with the `nycflights13::flights` dataset. You can load the data as follows:
+
+```{r}
+#| echo: true
+# install.packages("nycflights13") ## install it once
+flights <- nycflights13::flights
+```
+
+The dataset contains 336,776 flights that departed from New York City in 2013. The data comes from the US Bureau of Transportation Statistics and is documented in `?flights`.
+
+
+| Variable          | Description                                           |
+|--------------------|-------------------------------------------------------|
+| `year`            | Year of the flight (all 2013)                        |
+| `month`           | Month of the flight (1 = January, ..., 12 = December)|
+| `day`             | Day of the month                                    |
+| `dep_time`        | Actual departure time (HHMM)                        |
+| `sched_dep_time`  | Scheduled departure time (HHMM)                     |
+| `dep_delay`       | Departure delay in minutes                          |
+| `arr_time`        | Actual arrival time (HHMM)                         |
+| `sched_arr_time`  | Scheduled arrival time (HHMM)                      |
+| `arr_delay`       | Arrival delay in minutes                           |
+| `carrier`         | Airline carrier code (e.g., UA for United Airlines)|
+| `flight`          | Flight number                                       |
+| `origin`          | Origin airport code (`JFK`, `LGA`, or `EWR`)       |
+| `dest`            | Destination airport code                           |
+| `air_time`        | Time spent in the air (in minutes)                 |
+| `distance`        | Distance flown (in miles)                          |
+
+
+1. Find all flights that departed from John F. Kennedy Intl Airport (`origin == JFK`) and that departed more than 120 minutes late.
+
+```{r}
+flights |>
+  filter(origin == "JFK", dep_delay > 120)
+```
+
+2. Calculate the **total number of flights** that departed between **January and June** (inclusive)
+
+```{r}
+flights |>
+  filter(month %in% 1:6)
+```
+
+
+3. List the **top 10 longest flights** (by distance) departing from **LaGuardia Airport** (`origin == LGA`). Display the destination, carrier, and flight number, and distance of those 10 flights.
+
+```{r}
+# Top 10 longest flights by distance
+flights |>
+  filter(origin == "LGA") |>
+  select(dest, carrier, flight, distance) |>
+  arrange(desc(distance)) |>
+  slice_head(n = 10)
+```
+
+4. Compute the **average departure delay** for each airline (`carrier`) and identify the **5 worst-performing carriers** (those with the longest average delays)
+
+```{r}
+flights |>
+  summarize(mean_d = mean(dep_delay, na.rm = T), .by = carrier) |>
+  arrange(desc(mean_d))
+```
+
+5. For each **destination airport**, calculate: 
+    - The **total number of flights**
+    - The **average arrival delay**     
+Sort the results to show the **busiest destinations first** (i.e. descending order of the total number of flights).
+
+
+```{r}
+flights |>
+  summarise(
+    total_flights = n(),
+    avg_arr_delay = mean(arr_delay, na.rm = TRUE), .by = dest
+  ) |>
+  arrange(desc(total_flights))
+```
+
+
+
+6. Find the **top 5 destinations** with the **highest average departure delay** for flights departing from `JFK` in June. 
+
+```{r}
+flights |>
+  filter(origin == "JFK", month == 6) |>
+  summarise(
+    total_flights = n(),
+    avg_dep_delay = mean(dep_delay, na.rm = TRUE), .by = dest
+  ) |>
+  arrange(desc(avg_dep_delay)) |>
+  slice_head(n = 5)
+```
+
+7. Does it matter what order you used `filter()` and `arrange()` if you’re using both? Why/why not? Think about the results and how much work the functions would have to do.
+
+8. Create two categorical variables from the `flights` dataset:
+
+    - `dep_delay_category`: "On time" (≤0 min), "Slight delay" (1–15 min), "Severe delay" (>15 min)  
+    - `distance_category`: "Short" (<500 miles), "Medium" (500–1500 miles), "Long" (>1500 miles)    
+Construct a contingency table showing flight frequencies by `dep_delay_category` and `distance_category`.
+
+```{r}
+flights |>
+  mutate(
+    dep_delay_category = case_when(
+      dep_delay <= 0 ~ "On time",
+      dep_delay <= 15 ~ "Slight delay",
+      dep_delay > 15 ~ "Severe delay"
+    ),
+    distance_category = case_when(
+      distance < 500 ~ "Short",
+      distance <= 1500 ~ "Medium",
+      distance > 1500 ~ "Long"
+    )
+  ) |>
+  count(dep_delay_category, distance_category) |>
+  pivot_wider(names_from = distance_category, values_from = n, values_fill = 0)
+```
+
+
+
+## Task 2 (Exploratory Data Analysis)
+
+The data file `mothers.sav` contains a part of the nationally representative 2011 Bangladesh Demographic Health Survey (BDHS) data. A total of 2,705 singleton infants born in five years before survey date are considered in this data. Below are some key variables, along with their descriptions and value labels (where applicable):
+
+```{r}
+#| echo: false
+mothers <- haven::read_sav("data/mothers.sav")
+mothers <- mothers |>
+  mutate(v101 = as_factor(v101),
+         v102 = as_factor(v102),
+         v106 = as_factor(v106),
+         v190 = as_factor(v190),
+         v457 = as_factor(v457))
+```
+
+
+| Variable | Description                              | Value Labels                                                                 |
+|----------|------------------------------------------|------------------------------------------------------------------------------|
+| caseid   | case identification                      |                                                                              |
+| v002     | household number                         |                                                                              |
+| v012     | respondent's current age                 |                                                                              |
+| v101     | region                                   | 1=Barisal, 2=Chittagong, 3=Dhaka, 4=Khulna, 5=Rajshahi, 6=Rangpur, 7=Sylhet |
+| v102     | type of place of residence               | 1=Urban, 2=Rural                                                             |
+| v106     | highest educational level                | 0=No education, 1=Primary, 2=Secondary, 3=Higher                            |
+| v119     | household has electricity                | 0=No, 1=Yes                                                                  |
+| v121     | household has television                 | 0=No, 1=Yes                                                                  |
+| v130     | religion                                 | 1=Islam, 2=Hinduism, 3=Christianity, 4=Buddhism, 96=Others                  |
+| v190     | wealth index                             | 1=Poorest, 2=Poorer, 3=Middle, 4=Richer, 5=Richest                          |
+| v201     | total children ever born                 |                                                                              |
+| v212     | age of respondent at 1st birth           |                                                                              |
+| v213     | currently pregnant                       | 1=No or unsure, 2=Yes                                                       |
+| v437     | respondents' weight in kilograms (1 decimal) |                                                                           |
+| v438     | respondents' height in centimeters (1 decimal) |                                                                        |
+| v445     | body mass index                          | 9998=Flagged cases                                                          |
+| v453     | hemoglobin level(g/dl-1 decimal)         | 900 or above=Missing                                                        |
+| v457     | anemia level                             | 1=Severe, 2=Moderate, 3=Mild, 4=Not Anemic                                 |
+| v714     | respondent currently working             | 0=No, 1=Yes                                                                  |
+
+
+(a) Find the number of mothers who are from Dhaka region and have age greater than 35.
+
+```{r}
+mothers |>
+  filter(v101 == 3 & v012 > 35) |>
+  nrow()
+```
+
+(b) Find the median age of mothers according to their place of residence (`v102`).
+
+```{r}
+mothers |>
+  summarise(median_age = median(v012), .by = v102)
+```
+
+(c) Create a frequency table for the variable v730 (husband/partner's age) using the following class intervals: `(min, 30)`, `[30, 35)`, `[35, 40)`, `[40, 45)`, `[45, max)`.
+
+```{r}
+mothers |>
+  mutate(hus_age_cat = case_when(
+    v730 < 30 ~ "youngest",
+    v730 < 35 ~ "younger",
+    v730 < 40 ~ "young",
+    v730 < 45 ~ "old",
+    v730 >= 45 ~ "older",
+    .default = NA
+  )) |>
+  count(hus_age_cat)
+```
+
+(d) Obtain a bivariate table for type of residence (`v102`) and wealth index (`v190`).
+
+```{r}
+mothers |>
+  count(v102, v190) |>
+  pivot_wider(names_from = v102, values_from = n)
+```
+
+
+(e) Consider two quantitative variables respondents' weight (`v437`) and height (`v438`):
+
+    1. Draw a scatter plot between those two variables with proper title and axis labels.
+    2. Add smoothed lines to the scatter plot for two types of place of residence (`v102`).
+    3. Reproduce (1) with colored points for different wealth index groups (`v190`).
+    4. Instead of colored points, now use different shapes of the points on the scatter plot for different regions (`v101`) to reproduce (1).
+
+```{r}
+library(ggplot2)
+
+# 1. Basic scatter plot
+ggplot(mothers) +
+  geom_point(aes(x = v438, y = v437)) +
+  labs(
+    title = "Relationship between Height and Weight",
+    x = "Height (cm)", y = "Weight (kg)"
+  )
+
+# 2. With smoothed lines by residence type
+ggplot(mothers, aes(x = v438, y = v437, color = v102)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Height vs Weight by Residence Type",
+    x = "Height (cm)", y = "Weight (kg)",
+    color = "Residence Type"
+  )
+
+# 3. Colored by wealth index
+ggplot(mothers, aes(x = v438, y = v437, color = v190)) +
+  geom_point() +
+  labs(
+    title = "Height vs Weight by Wealth Index",
+    x = "Height (cm)", y = "Weight (kg)",
+    color = "Wealth Index"
+  )
+
+# 4. Different shapes by region
+ggplot(mothers, aes(x = v438, y = v437, shape = v101)) +
+  geom_point() +
+  labs(
+    title = "Height vs Weight by Region",
+    x = "Height (cm)", y = "Weight (kg)",
+    shape = "Region"
+  )
+```
+
+
+
+(f) Draw a bar diagram for anemia status of the women (`v457`) variable clustered by the place of residence (`v102`) variable with title and axis labels of the graph. Please use color for types of place of residence.
+
+```{r}
+mothers |>
+  ggplot(aes(x = v457, fill = v102)) +
+  geom_bar(position = "dodge") +
+  labs(
+    title = "Anemia Status by Residence Type",
+    x = "Anemia Status", y = "Count",
+    fill = "Residence Type"
+  ) +
+  scale_fill_brewer(palette = "Set1")
+```
+
+<!-- (g) Draw a pie chart for religion of the women (`v130`).-->
+
+(h) Draw a histogram of the age of the respondents at birth of her first child (`v212`) with title. Add a normal curve to that histogram. Is the mean age at birth of her first child significantly lower than 19 years?
+
+```{r}
+# Calculate mean and sd
+mean_age <- mean(mothers$v212, na.rm = TRUE)
+sd_age <- sd(mothers$v212, na.rm = TRUE)
+
+ggplot(mothers, aes(x = v212)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30,
+                 fill = "lightblue", color = "black") +
+  stat_function(
+    fun = dnorm, args = list(mean = mean_age, sd = sd_age),
+    color = "red", size = 1
+  ) +
+  labs(
+    title = "Distribution of Age at First Birth",
+    x = "Age at First Birth", y = "Density"
+  )
+
+# Test if mean is significantly lower than 19
+t_test <- t.test(mothers$v212, mu = 19, alternative = "less")
+print(t_test)
+```
+
+(i) Draw boxplot for the age of respondent at birth of her first child (`v212`) for each of the type of place of residence (`v102`) with appropriate title.
+
+```{r}
+mothers |>
+  ggplot(aes(x = v102, y = v212)) +
+  geom_boxplot(fill = "lightgreen") +
+  labs(
+    title = "Age at First Birth by Residence Type",
+    x = "Residence Type", y = "Age at First Birth"
+  )
+```
+
+(j) Draw boxplot for the age of respondent at birth of her first child (`v212`) for each category of the highest educational level attained by the respondent (`v106`) with appropriate title.
+
+```{r}
+mothers |>
+  ggplot(aes(x = v106, y = v212)) +
+  geom_boxplot(fill = "lightpink") +
+  labs(
+    title = "Age at First Birth by Education Level",
+    x = "Education Level", y = "Age at First Birth"
+  )
+```
+
+(k) Draw a scatter plot between the body mass index (`v445`) and hemoglobin level of the respondent women (`v453`) for each of the region (`v101`) with appropriate title and axis labels. Change the original theme to the black and white one.
+
+```{r}
+mothers |>
+  ggplot(aes(x = v445, y = v453)) +
+  geom_point() +
+  facet_wrap(~v101) +
+  labs(
+    title = "BMI vs Hemoglobin Level by Region",
+    x = "Body Mass Index", y = "Hemoglobin Level"
+  ) +
+  theme_bw()
+```
+
+
